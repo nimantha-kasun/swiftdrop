@@ -65,7 +65,7 @@ const initiatePurchase = async (req, res, next) => {
     }
 
     // Generate unique jobId for this purchase attempt
-    const jobId = `purchase:${userId}:${eventId}:${itemId}:${uuidv4()}`;
+    const jobId = `purchase-${userId}-${eventId}-${itemId}-${uuidv4()}`;
 
     await enqueuePurchase({ userId, eventId, itemId, jobId });
 
@@ -143,4 +143,55 @@ const getMyOrders = async (req, res, next) => {
   }
 };
 
-module.exports = { initiatePurchase, getPurchaseStatus, getMyOrders };
+/**
+ * POST /api/purchases/simulate-load (Admin Only)
+ * Simulates high concurrency by pushing dummy jobs to the queue.
+ */
+const simulateLoad = async (req, res, next) => {
+  try {
+    const { eventId, itemId, count = 100 } = req.body;
+    
+    // Ensure enough dummy users exist
+    const User = require('../models/User');
+    const existingCount = await User.countDocuments({ email: /dummy.*@test.com/ });
+    let users;
+    
+    if (existingCount < count) {
+      const newUsers = [];
+      for (let i = 0; i < count; i++) {
+        newUsers.push({
+          name: `Dummy ${i}`,
+          email: `dummy${i}@test.com`,
+          password: 'password',
+          role: 'Customer',
+          status: 'active'
+        });
+      }
+      // Insert blindly (might throw if already exists, but we checked count)
+      await User.deleteMany({ email: /dummy.*@test.com/ });
+      users = await User.insertMany(newUsers);
+    } else {
+      users = await User.find({ email: /dummy.*@test.com/ }).limit(count);
+    }
+
+    const { getPurchaseQueue } = require('../queues/purchaseQueue');
+    const queue = getPurchaseQueue();
+    
+    const jobs = users.map((u, i) => ({
+      name: 'processPurchase',
+      data: {
+        userId: u._id.toString(),
+        eventId,
+        itemId
+      }
+    }));
+
+    await queue.addBulk(jobs);
+
+    res.json({ success: true, message: `Successfully pushed ${count} load test requests for this item!` });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { initiatePurchase, getPurchaseStatus, getMyOrders, simulateLoad };

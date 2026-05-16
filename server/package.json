@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "test:load": "node src/pushJobsTest.js",
+    "clear:dummies": "node src/clearDummies.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

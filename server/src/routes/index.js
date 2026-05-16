@@ -32,9 +32,10 @@ router.patch('/events/:id/status', protect, adminOnly, forceUpdateStatus);
 router.get('/events/:id/dashboard', protect, adminOnly, getEventDashboard);
 
 // Purchase routes
-const { initiatePurchase, getPurchaseStatus, getMyOrders } = require('../controllers/purchaseController');
+const { initiatePurchase, getPurchaseStatus, getMyOrders, simulateLoad } = require('../controllers/purchaseController');
 
 router.post('/purchases', protect, purchaseLimiter, initiatePurchase);
+router.post('/purchases/simulate-load', protect, adminOnly, simulateLoad);
 router.get('/purchases/status/:jobId', protect, getPurchaseStatus);
 router.get('/purchases/my-orders', protect, getMyOrders);
 

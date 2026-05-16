@@ -82,13 +82,17 @@ const startPurchaseWorker = () => {
 
       // ── Step 1: Validate event is Live ──────────────────────────────────────
       const event = await Event.findById(eventId).lean();
+      const itemDoc = await Item.findById(itemId).select('name').lean();
+      const itemName = itemDoc ? itemDoc.name : itemId;
+
       if (!event) {
-        return { success: false, reason: 'event_not_found', message: 'Event not found.' };
+        return { success: false, reason: 'event_not_found', itemName, message: 'Event not found.' };
       }
       if (event.status !== 'Live') {
         return {
           success: false,
           reason: 'event_not_live',
+          itemName,
           message: 'This event is not currently open for purchases.',
         };
       }
@@ -105,25 +109,23 @@ const startPurchaseWorker = () => {
         return {
           success: false,
           reason: 'already_purchased',
+          itemName,
           message: 'You have already purchased this item in this event.',
         };
       }
 
       // ── Step 3: ATOMIC stock decrement ──────────────────────────────────────
-      // This is the critical section. The filter `currentStock: { $gt: 0 }`
-      // ensures we NEVER decrement below zero, even if 1000 requests arrive
-      // simultaneously. MongoDB's atomic update guarantees this.
       const updatedItem = await Item.findOneAndUpdate(
         { _id: itemId, currentStock: { $gt: 0 } },
         { $inc: { currentStock: -1 } },
-        { new: true } // Return the updated document
+        { new: true }
       );
 
-      // If null is returned, stock was already 0 — sold out
       if (!updatedItem) {
         return {
           success: false,
           reason: 'sold_out',
+          itemName,
           message: 'Sorry, this item just sold out. You were so close!',
         };
       }
@@ -140,16 +142,15 @@ const startPurchaseWorker = () => {
           status: 'Confirmed',
         });
       } catch (err) {
-        // Duplicate key error (race condition on unique index) — roll back stock
         if (err.code === 11000) {
           await Item.findByIdAndUpdate(itemId, { $inc: { currentStock: 1 } });
           return {
             success: false,
             reason: 'already_purchased',
+            itemName,
             message: 'You have already purchased this item in this event.',
           };
         }
-        // Any other error — roll back stock
         await Item.findByIdAndUpdate(itemId, { $inc: { currentStock: 1 } });
         throw err;
       }
@@ -169,6 +170,7 @@ const startPurchaseWorker = () => {
       return {
         success: true,
         reason: 'confirmed',
+        itemName,
         message: '🎉 Purchase confirmed! Your item is secured.',
         orderId: order._id,
         currentStock: updatedItem.currentStock,
@@ -176,17 +178,17 @@ const startPurchaseWorker = () => {
     },
     {
       connection,
-      concurrency: 5, // Process 5 jobs at a time — safe because atomic ops handle races
+      concurrency: 5,
       limiter: {
-        max: 100,    // Max 100 jobs per duration
-        duration: 1000, // per second
+        max: 100,
+        duration: 1000,
       },
     }
   );
 
   worker.on('completed', (job, result) => {
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`✅ Job ${job.id} completed:`, result.reason);
+      console.log(`✅ Job ${job.id} [${result.itemName}] completed:`, result.reason);
     }
   });
 

@@ -51,6 +51,7 @@ export const purchasesAPI = {
   initiate: (data) => api.post('/purchases', data),
   getStatus: (jobId) => api.get(`/purchases/status/${encodeURIComponent(jobId)}`),
   getMyOrders: () => api.get('/purchases/my-orders'),
+  simulateLoad: (data) => api.post('/purchases/simulate-load', data),
 };
 
 // ─── Users ────────────────────────────────────────────────────────────────────
