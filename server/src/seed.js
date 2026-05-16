@@ -1,9 +1,9 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const User = require('../models/User');
-const Event = require('../models/Event');
-const Item = require('../models/Item');
+const User = require('./models/User');
+const Event = require('./models/Event');
+const Item = require('./models/Item');
 
 const seed = async () => {
   await mongoose.connect(process.env.MONGO_URI);
@@ -16,11 +16,10 @@ const seed = async () => {
   console.log('Cleared existing data.');
 
   // Create Admin user
-  const adminPassword = await bcrypt.hash('Admin@1234', 12);
   const admin = await User.create({
     name: 'SwiftDrop Admin',
     email: 'admin@swiftdrop.com',
-    password: adminPassword,
+    password: 'Admin@1234',
     role: 'Admin',
     status: 'active',
   });
