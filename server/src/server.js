@@ -3,6 +3,7 @@ const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const { Server } = require('socket.io');
 
 const connectDB = require('./config/db');
 const { initSocket } = require('./config/socket');

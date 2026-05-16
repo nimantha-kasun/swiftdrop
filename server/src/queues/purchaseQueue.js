@@ -10,6 +10,7 @@
  *  4. Socket.io emits real-time stock updates to all connected clients.
  */
 
+
 const { Queue, Worker, QueueEvents } = require('bullmq');
 const mongoose = require('mongoose');
 const { getRedisClient } = require('../config/redis');
