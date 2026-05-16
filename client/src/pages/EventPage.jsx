@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { eventsAPI, purchasesAPI } from '../services/api';
 import { useSocket } from '../context/SocketContext';
@@ -96,8 +96,15 @@ export default function EventPage() {
   }, [id, joinEvent, leaveEvent, onStockUpdate, onEventStatusChange]);
 
   // ── Auto-transition Locked→Live when countdown expires ───────────────────
+  // wasExpiredRef ensures the notification only shows when the timer *actually
+  // transitions* from false→true during the session, not on initial page load.
+  const wasExpiredRef = useRef(null);
   useEffect(() => {
-    if (event?.status === 'Locked' && countdown?.isExpired) {
+    if (!countdown) return;
+    const justExpired = wasExpiredRef.current === false && countdown.isExpired === true;
+    wasExpiredRef.current = countdown.isExpired;
+
+    if (event?.status === 'Locked' && justExpired) {
       setEvent((prev) => ({ ...prev, status: 'Live' }));
       toast.success('🔥 Event just went Live!', { description: 'The sale is now open!' });
     }

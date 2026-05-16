@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { eventsAPI } from '../services/api';
 import EventCard from '../components/EventCard';
-import { Zap, Search, SlidersHorizontal } from 'lucide-react';
+import { Zap, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSocket } from '../context/SocketContext';
+import { useNavigate } from 'react-router-dom';
 
 const FILTERS = ['All', 'Live', 'Locked', 'Closed'];
 
@@ -11,12 +13,70 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
+  const { onEventStatusChange } = useSocket();
+  const navigate = useNavigate();
+  const eventsRef = useRef([]);
 
   useEffect(() => {
     eventsAPI.getAll()
-      .then(({ data }) => setEvents(data.events))
+      .then(({ data }) => {
+        setEvents(data.events);
+        eventsRef.current = data.events;
+      })
       .catch(() => toast.error('Failed to load events.'))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Listen for real-time status changes globally
+  useEffect(() => {
+    if (!onEventStatusChange) return;
+    const cleanup = onEventStatusChange(({ eventId, status }) => {
+      // Update local state so card reflects the new status live
+      setEvents(prev => prev.map(e =>
+        e._id === eventId ? { ...e, status } : e
+      ));
+
+      // Show toast + browser notification when a Locked event goes Live
+      if (status === 'Live') {
+        const liveEvent = eventsRef.current.find(e => e._id === eventId);
+        const name = liveEvent?.name || 'A flash sale';
+
+        toast.success(`🔥 ${name} just went LIVE!`, {
+          description: 'Hurry! Stock is limited.',
+          duration: 8000,
+          action: {
+            label: 'Shop Now',
+            onClick: () => navigate(`/events/${eventId}`),
+          },
+        });
+
+        // Browser push notification (if permission granted)
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`⚡ ${name} is LIVE!`, {
+            body: 'Flash sale just started! Limited stock available.',
+            icon: '/favicon.ico',
+          });
+        }
+      }
+
+      if (status === 'Closed') {
+        const closedEvent = eventsRef.current.find(e => e._id === eventId);
+        toast.info(`${closedEvent?.name || 'Event'} has closed.`, { duration: 4000 });
+      }
+
+      // Keep ref in sync
+      eventsRef.current = eventsRef.current.map(e =>
+        e._id === eventId ? { ...e, status } : e
+      );
+    });
+    return cleanup;
+  }, [onEventStatusChange, navigate]);
+
+  // Request browser notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
   }, []);
 
   const filtered = events.filter((e) => {
